@@ -1,0 +1,218 @@
+import sqlite3
+
+# Connect to the database (or create it if it doesn't exist)
+conn = sqlite3.connect('music.db')
+
+# Create a cursor object
+c = conn.cursor()
+
+# Create the library table
+c.execute('''CREATE TABLE library
+             (id INTEGER PRIMARY KEY,
+             name TEXT NOT NULL)''')
+
+# Create the song table
+c.execute('''CREATE TABLE song
+             (id INTEGER PRIMARY KEY,
+             name TEXT NOT NULL,
+             duration INTEGER,
+             library_id INTEGER NOT NULL,
+             FOREIGN KEY (library_id) REFERENCES library(id))''')
+
+# Create the album table
+c.execute('''CREATE TABLE album
+             (id INTEGER PRIMARY KEY,
+             name TEXT NOT NULL,
+             artist_id INTEGER NOT NULL,
+             library_id INTEGER NOT NULL,
+             FOREIGN KEY (artist_id) REFERENCES artist(id),
+             FOREIGN KEY (library_id) REFERENCES library(id))''')
+
+# Create the artist table
+c.execute('''CREATE TABLE artist
+             (id INTEGER PRIMARY KEY,
+             name TEXT NOT NULL)''')
+
+# Create the playlists table
+c.execute('''CREATE TABLE playlists
+             (id INTEGER PRIMARY KEY,
+             name TEXT NOT NULL,
+             song_id INTEGER NOT NULL,
+             FOREIGN KEY (song_id) REFERENCES song(id))''')
+
+# Create the favorites table
+c.execute('''CREATE TABLE favorites
+             (id INTEGER PRIMARY KEY,
+             song_id INTEGER NOT NULL,
+             FOREIGN KEY (song_id) REFERENCES song(id))''')
+
+# Save the changes
+conn.commit()
+
+# Close the connection
+conn.close()
+
+import os
+import sqlite3
+from mutagen.mp3 import MP3
+from mutagen.aac import AAC
+from mutagen.wavpack import WavPack
+
+
+class Library:
+    def __init__(self, db_file):
+        self.db_file = db_file
+
+    def scan_directory(self, directory):
+        conn = sqlite3.connect(self.db_file)
+        c = conn.cursor()
+
+        for root, dirs, files in os.walk(directory):
+            for file in files:
+                file_path = os.path.join(root, file)
+                file_ext = os.path.splitext(file)[-1].lower()
+
+                if file_ext in ('.mp3', '.aac', '.wav'):
+                    try:
+                        if file_ext == '.mp3':
+                            audio = MP3(file_path)
+                            title = audio.get('TIT2', 'unknown')
+                            artist = audio.get('TPE1', 'unknown')
+                            album = audio.get('TALB', 'unknown')
+                            duration = int(audio.info.length)
+
+                        elif file_ext == '.aac':
+                            audio = AAC(file_path)
+                            title = audio.get('title', 'unknown')
+                            artist = audio.get('artist', 'unknown')
+                            album = audio.get('album', 'unknown')
+                            duration = int(audio.info.length)
+
+                        elif file_ext == '.wav':
+                            audio = WavPack(file_path)
+                            title = audio.get('title', 'unknown')
+                            artist = audio.get('artist', 'unknown')
+                            album = audio.get('album', 'unknown')
+                            duration = int(audio.info.length)
+
+                        library_id = self._get_or_create_library(c, root)
+
+                        c.execute("INSERT INTO song (name, duration, library_id, artist, album) VALUES (?, ?, ?, ?, ?)",
+                                  (title, duration, library_id, artist, album))
+
+                    except Exception as e:
+                        print(f"Failed to read tags for {file_path}: {str(e)}")
+
+        conn.commit()
+        conn.close()
+
+    def _get_or_create_library(self, cursor, library_path):
+        cursor.execute("SELECT id FROM library WHERE name=?", (library_path,))
+        row = cursor.fetchone()
+
+        if row:
+            return row[0]
+        else:
+            cursor.execute("INSERT INTO library (name) VALUES (?)", (library_path,))
+            return cursor.lastrowid
+
+    def ignore_directory(self, directory):
+        conn = sqlite3.connect(self.db_file)
+        c = conn.cursor()
+
+        c.execute("DELETE FROM song WHERE library_id IN (SELECT id FROM library WHERE name LIKE ? || '%')",
+                  (os.path.abspath(directory),))
+        c.execute("DELETE FROM library WHERE name LIKE ? || '%'", (os.path.abspath(directory),))
+
+        conn.commit()
+        conn.close()
+
+    def add_directory(self, directory):
+        self.scan_directory(directory)
+
+    def delete_song(self, song_id):
+        conn = sqlite3.connect(self.db_file)
+        c = conn.cursor()
+
+        c.execute("DELETE FROM song WHERE id=?", (song_id,))
+
+        conn.commit()
+        conn.close()
+
+
+import sqlite3
+from mutagen.mp3 import MP3
+from mutagen.aac import AAC
+from mutagen.wavpack import WavPack
+
+
+class Song:
+    def __init__(self, db_file):
+        self.db_file = db_file
+
+    def modify_tags(self, song_id, new_title=None, new_artist=None, new_album=None):
+        conn = sqlite3.connect(self.db_file)
+        c = conn.cursor()
+
+        if new_title:
+            c.execute("UPDATE song SET name=? WHERE id=?", (new_title, song_id))
+        if new_artist:
+            c.execute("UPDATE song SET artist=? WHERE id=?", (new_artist, song_id))
+        if new_album:
+            c.execute("UPDATE song SET album=? WHERE id=?", (new_album, song_id))
+
+        conn.commit()
+        conn.close()
+
+    def add_song(self, file_path, library_path):
+        conn = sqlite3.connect(self.db_file)
+        c = conn.cursor()
+
+        file_ext = file_path.split(".")[-1].lower()
+        if file_ext == 'mp3':
+            audio = MP3(file_path)
+            title = audio.get('TIT2', 'unknown')
+            artist = audio.get('TPE1', 'unknown')
+            album = audio.get('TALB', 'unknown')
+            duration = int(audio.info.length)
+
+        elif file_ext == 'aac':
+            audio = AAC(file_path)
+            title = audio.get('title', 'unknown')
+            artist = audio.get('artist', 'unknown')
+            album = audio.get('album', 'unknown')
+            duration = int(audio.info.length)
+
+        elif file_ext == 'wav':
+            audio = WavPack(file_path)
+            title = audio.get('title', 'unknown')
+            artist = audio.get('artist', 'unknown')
+            album = audio.get('album', 'unknown')
+            duration = int(audio.info.length)
+
+        library_id = self._get_or_create_library(c, library_path)
+
+        c.execute("INSERT INTO song (name, duration, library_id, artist, album) VALUES (?, ?, ?, ?, ?)",
+                  (title, duration, library_id, artist, album))
+
+        conn.commit()
+        conn.close()
+
+    def delete_song(self, song_id):
+        conn = sqlite3.connect(self.db_file)
+        c = conn.cursor()
+
+        c.execute("DELETE FROM song WHERE id=?", (song_id,))
+
+        conn.commit()
+        conn.close()
+
+    def _get_or_create_library(self, cursor, library_path):
+        cursor.execute("SELECT id FROM library WHERE name=?", (library_path,))
+        row = cursor.fetchone()
+
+        if row:
+            return row[0]
+        else:
+            cursor.execute("INSERT INTO library (name) VALUES (?)", (library_path,))
+            return cursor.lastrowid
