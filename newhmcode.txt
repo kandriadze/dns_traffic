@@ -1,0 +1,190 @@
+import sqlite3
+
+# Create a connection to the database
+conn = sqlite3.connect('my_database.db')
+
+# Create a cursor object to interact with the database
+cur = conn.cursor()
+
+# Create a table to store audio file metadata
+cur.execute('''CREATE TABLE library
+               (id INTEGER PRIMARY KEY,
+                title TEXT,
+                artist_id INTEGER,
+                album_id INTEGER,
+                duration INTEGER,
+                genre TEXT,
+                filename TEXT)''')
+
+# Create a table to store artist data
+cur.execute('''CREATE TABLE artist
+               (id INTEGER PRIMARY KEY,
+                name TEXT)''')
+
+# Create a table to store album data
+cur.execute('''CREATE TABLE album
+               (id INTEGER PRIMARY KEY,
+                title TEXT,
+                artist_id INTEGER,
+                year INTEGER)''')
+
+# Create a table to store song data
+cur.execute('''CREATE TABLE song
+               (id INTEGER PRIMARY KEY,
+                title TEXT,
+                artist_id INTEGER,
+                album_id INTEGER,
+                duration INTEGER,
+                genre TEXT)''')
+
+# Create a table to store playlist data
+cur.execute('''CREATE TABLE playlist
+               (id INTEGER PRIMARY KEY,
+                name TEXT)''')
+
+# Create a table to store favorite songs data
+cur.execute('''CREATE TABLE favorites
+               (id INTEGER PRIMARY KEY,
+                song_id INTEGER,
+                FOREIGN KEY(song_id) REFERENCES song(id))''')
+
+# Commit the changes and close the connection
+conn.commit()
+conn.close()
+
+
+import os
+import sqlite3
+import mutagen
+
+class Library:
+    def __init__(self, db_path):
+        self.db_path = db_path
+        self.conn = sqlite3.connect(self.db_path)
+        self.cur = self.conn.cursor()
+        self.create_tables()
+
+    def __del__(self):
+        self.conn.close()
+
+    def scan_directory(self, dir_path):
+        for root, dirs, files in os.walk(dir_path):
+            for file in files:
+                if file.endswith(('.mp3', '.wav', '.aac')):
+                    full_path = os.path.join(root, file)
+                    try:
+                        audio = mutagen.File(full_path)
+                        if audio:
+                            title = audio.get('title', ['unknown'])[0]
+                            artist = audio.get('artist', ['unknown'])[0]
+                            album = audio.get('album', ['unknown'])[0]
+                            duration = int(audio.info.length)
+                            genre = audio.get('genre', ['unknown'])[0]
+                            filename = os.path.basename(full_path)
+                            self.cur.execute("INSERT INTO library (title, artist, album, duration, genre, filename) VALUES (?, ?, ?, ?, ?, ?)", (title, artist, album, duration, genre, filename))
+                            self.conn.commit()
+                    except Exception as e:
+                        print(f"Error processing file {full_path}: {e}")
+
+    def add_directory(self, dir_path):
+        self.scan_directory(dir_path)
+
+    def delete_directory(self, dir_path):
+        self.cur.execute("DELETE FROM library WHERE filename LIKE ?", (f"%{dir_path}%",))
+        self.conn.commit()
+
+    def display_library(self):
+        self.cur.execute("SELECT * FROM library")
+        rows = self.cur.fetchall()
+        for row in rows:
+            print(row)
+
+import sqlite3
+import mutagen
+
+#class album
+class Album:
+    def __init__(self, db_path):
+        self.db_path = db_path
+        self.conn = sqlite3.connect(self.db_path)
+        self.cur = self.conn.cursor()
+
+    def __del__(self):
+        self.conn.close()
+
+    def add_album(self, title, artist_name, year):
+        self.cur.execute("SELECT id FROM artist WHERE name = ?", (artist_name,))
+        artist_id = self.cur.fetchone()
+        if not artist_id:
+            self.cur.execute("INSERT INTO artist (name) VALUES (?)", (artist_name,))
+            artist_id = self.cur.lastrowid
+        else:
+            artist_id = artist_id[0]
+        self.cur.execute("INSERT INTO album (title, artist_id, year) VALUES (?, ?, ?)", (title, artist_id, year))
+        self.conn.commit()
+
+    def delete_album(self, album_id):
+        self.cur.execute("DELETE FROM album WHERE id = ?", (album_id,))
+        self.conn.commit()
+
+    def modify_tag(self, album_id, field, value):
+        self.cur.execute("SELECT filename FROM library WHERE album_id = ?", (album_id,))
+        filenames = self.cur.fetchall()
+        for filename in filenames:
+            try:
+                audio = mutagen.File(filename[0])
+                if audio:
+                    audio[field] = value
+                    audio.save()
+            except Exception as e:
+                print(f"Error modifying tag for {filename[0]}: {e}")
+
+    def display_album(self, album_id):
+        self.cur.execute("SELECT album.title, artist.name, album.year FROM album JOIN artist ON album.artist_id = artist.id WHERE album.id = ?", (album_id,))
+        row = self.cur.fetchone()
+        if row:
+            print(f"Album: {row[0]}")
+            print(f"Artist: {row[1]}")
+            print(f"Year: {row[2]}")
+            self.cur.execute("SELECT title, artist, duration, genre FROM library WHERE album_id = ?", (album_id,))
+            rows = self.cur.fetchall()
+            for row in rows:
+                print(row)
+
+import sqlite3
+import mutagen
+
+class Artist:
+    def __init__(self, db_path):
+        self.db_path = db_path
+        self.conn = sqlite3.connect(self.db_path)
+        self.cur = self.conn.cursor()
+
+    def __del__(self):
+        self.conn.close()
+
+    def add_artist(self, name):
+        self.cur.execute("INSERT INTO artist (name) VALUES (?)", (name,))
+        self.conn.commit()
+
+    def delete_artist(self, artist_id):
+        self.cur.execute("DELETE FROM artist WHERE id = ?", (artist_id,))
+        self.conn.commit()
+
+    def modify_tag(self, artist_id, field, value):
+        self.cur.execute("SELECT filename FROM library WHERE artist_id = ?", (artist_id,))
+        filenames = self.cur.fetchall()
+        for filename in filenames:
+            try:
+                audio = mutagen.File(filename[0])
+                if audio:
+                    audio[field] = value
+                    audio.save()
+            except Exception as e:
+                print(f"Error modifying tag for {filename[0]}: {e}")
+
+    def display_artists(self):
+        self.cur.execute("SELECT name FROM artist")
+        rows = self.cur.fetchall()
+        for row in rows:
+            print(row[0])
