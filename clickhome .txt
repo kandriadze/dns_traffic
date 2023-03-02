@@ -1,0 +1,165 @@
+import click
+
+from library import Library
+from album import Album
+from artist import Artist
+from song import Song
+from playlist import Playlist
+from favorites import Favorites
+from search import Search
+
+library = Library()
+album = Album()
+artist = Artist()
+song = Song()
+playlist = Playlist()
+favorites = Favorites()
+search = Search()
+
+@click.group()
+def cli():
+    pass
+
+# Library commands
+@cli.group()
+def library():
+    pass
+
+@library.command()
+@click.argument('directories', nargs=-1, type=click.Path(exists=True))
+def scan(directories):
+    library.scan(directories)
+
+@library.command()
+@click.argument('directory', type=click.Path(exists=True))
+def add_directory(directory):
+    library.add_directory(directory)
+
+@library.command()
+@click.argument('directory', type=click.Path(exists=True))
+def remove_directory(directory):
+    library.remove_directory(directory)
+
+@library.command()
+def display():
+    library.display()
+
+# Album commands
+@cli.group()
+def album():
+    pass
+
+@album.command()
+@click.argument('title')
+@click.option('--artist', prompt=True)
+def add(title, artist):
+    album.add(title, artist)
+
+@album.command()
+@click.argument('title')
+def remove(title):
+    album.remove(title)
+
+@album.command()
+@click.argument('title')
+@click.option('--artist', prompt=True)
+@click.option('--new-title', prompt=True)
+@click.option('--new-artist', prompt=True)
+def modify(title, artist, new_title, new_artist):
+    album.modify(title, artist, new_title, new_artist)
+
+@album.command()
+@click.argument('title')
+def display(title):
+    album.display(title)
+
+@album.command()
+@click.argument('title')
+def display_cover(title):
+    album.display_cover(title)
+
+# Artist commands
+@cli.group()
+def artist():
+    pass
+
+@artist.command()
+@click.argument('name')
+def add(name):
+    artist.add(name)
+
+@artist.command()
+@click.argument('name')
+def remove(name):
+    artist.remove(name)
+
+@artist.command()
+@click.argument('name')
+@click.option('--new-name', prompt=True)
+def modify(name, new_name):
+    artist.modify(name, new_name)
+
+@artist.command()
+@click.argument('name')
+def display(name):
+    artist.display(name)
+
+# Song commands
+@cli.group()
+def song():
+    pass
+
+@song.command()
+@click.argument('title')
+@click.option('--artist', prompt=True)
+@click.option('--album', prompt=True)
+def add(title, artist, album):
+    song.add(title, artist, album)
+
+@song.command()
+@click.argument('title')
+def remove(title):
+    song.remove(title)
+
+@song.command()
+@click.argument('title')
+@click.option('--artist', prompt=True)
+@click.option('--album', prompt=True)
+@click.option('--new-title', prompt=True)
+@click.option('--new-artist', prompt=True)
+@click.option('--new-album', prompt=True)
+def modify(title, artist, album, new_title, new_artist, new_album):
+    song.modify(title, artist, album, new_title, new_artist, new_album)
+
+@song.command()
+@click.argument('title')
+def display(title):
+    song.display(title)
+
+@song.command()
+@click.argument('title')
+def display_cover(title):
+    song.display_cover(title)
+
+# Playlist commands
+@cli.group()
+def playlist():
+    pass
+
+@playlist.command()
+@click.argument('name')
+def create(name):
+    playlist.create(name)
+
+@playlist.command()
+@click.argument('name')
+def delete(name):
+    playlist.delete(name)
+
+@playlist.command()
+@click.argument('name')
+@click.argument('title')
+def add_song(name, title):
+    playlist.add_song(name, title)
+
+
