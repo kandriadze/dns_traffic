@@ -1,0 +1,30 @@
+import os
+import glob
+import json
+from datetime import datetime
+from file_stats import FileStats
+
+# Set the directory path from the config file
+directory_path = "/path/to/your/directory"
+
+# Get a list of CSV files in the directory
+csv_files = glob.glob(os.path.join(directory_path, "*.csv"))
+
+# Create a dictionary to store the results
+results = {}
+
+# Loop through each CSV file and get the file stats using the FileStats class
+for csv_file in csv_files:
+    file_stats = FileStats(csv_file)
+    stats = file_stats.get_file_stats()
+    results[csv_file] = stats
+
+# Generate a new JSON file with a timestamp in the filename
+now = datetime.now()
+timestamp = now.strftime("%Y-%m-%d_%H")
+output_filename = f"results_{timestamp}.json"
+with open(output_filename, "w") as f:
+    json.dump(results, f)
+
+# Print a message indicating that the JSON file has been generated
+print(f"JSON file generated: {output_filename}")
