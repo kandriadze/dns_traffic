@@ -1,0 +1,55 @@
+import requests
+import csv
+from google.cloud import storage
+from google.cloud import bigquery
+from datetime import datetime
+
+PROJECT_ID = "your-project-id"
+BUCKET_NAME = "your-bucket-name"
+DATASET_ID = "your-bigquery-dataset-id"
+TABLE_ID = "your-bigquery-table-id"
+
+def process_data(event, context):
+    currencies = ["USD", "EUR", "GBP", "JPY", "CAD"]
+    current_hour = datetime.now().strftime("%Y-%m-%d %H:00:00")
+    
+    api_url = "https://api.exchangeratesapi.io/latest?base=USD"
+    response = requests.get(api_url)
+    data = response.json()["rates"]
+    
+    rows = []
+    for currency in currencies:
+        row = {
+            "hour": current_hour,
+            "currency": currency,
+            "rate": data[currency]
+        }
+        rows.append(row)
+    
+    # Convert to CSV
+    csv_data = "hour,currency,rate\n"
+    for row in rows:
+        csv_data += f"{row['hour']},{row['currency']},{row['rate']}\n"
+    
+    # Write CSV to Cloud Storage
+    storage_client = storage.Client(project=PROJECT_ID)
+    bucket = storage_client.bucket(BUCKET_NAME)
+    blob = bucket.blob(f"{current_hour}.csv")
+    blob.upload_from_string(csv_data, content_type="text/csv")
+    
+    # Write CSV to BigQuery
+    bq_client = bigquery.Client(project=PROJECT_ID)
+    table = bq_client.get_table(f"{PROJECT_ID}.{DATASET_ID}.{TABLE_ID}")
+    job_config = bigquery.LoadJobConfig()
+    job_config.source_format = bigquery.SourceFormat.CSV
+    job_config.skip_leading_rows = 1
+    job_config.autodetect = True
+    
+    load_job = bq_client.load_table_from_uri(
+        f"gs://{BUCKET_NAME}/{current_hour}.csv",
+        table,
+        job_config=job_config
+    )
+    load_job.result()
+    
+    return "Done"
