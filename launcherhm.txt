@@ -1,0 +1,29 @@
+import requests
+from google.cloud import bigquery
+from datetime import datetime
+
+PROJECT_ID = 'your-project-id'
+DATASET_ID = 'your-dataset-id'
+TABLE_ID = 'your-table-id'
+MAIN_FUNCTION_URL = 'https://your-main-function-url'
+
+def launcher_cloud_function(request):
+    # Check if data exists for the current hour
+    current_hour = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
+    client = bigquery.Client(project=PROJECT_ID)
+    table = client.get_table(f'{PROJECT_ID}.{DATASET_ID}.{TABLE_ID}')
+    query = f"SELECT COUNT(*) FROM `{table.full_table_id}` WHERE hour = TIMESTAMP('{current_hour}')"
+    query_job = client.query(query)
+    result = query_job.result()
+    row_count = next(result)[0]
+
+    if row_count > 0:
+        # Data already exists for the current hour
+        return 'Data has already been retrieved for the current hour'
+    else:
+        # Trigger the main Cloud Function via HTTP request
+        response = requests.get(MAIN_FUNCTION_URL)
+        if response.status_code == 200:
+            return 'Main Cloud Function triggered successfully'
+        else:
+            return f'Failed to trigger Main Cloud Function: {response.text}'
